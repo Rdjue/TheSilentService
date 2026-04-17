@@ -1,0 +1,16 @@
+# 本地開發設定（不要上傳）
+.claude/
+
+# 敏感資料（密碼、金鑰等）
+data.txt
+*.env
+*.env.local
+
+# 作業系統產生的檔案
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 編輯器設定
+.vscode/
+.idea/

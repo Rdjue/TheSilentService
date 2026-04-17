@@ -1,0 +1,1814 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>沉默的艦隊</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'Microsoft JhengHei', 'PingFang TC', sans-serif;
+  background: linear-gradient(180deg, #0a1628 0%, #0d2137 30%, #122a4a 60%, #0a1628 100%);
+  color: #e0e8f0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  user-select: none;
+  overflow-x: hidden;
+}
+
+h1 {
+  text-align: center;
+  font-size: 1.6rem;
+  padding: 12px 0 4px;
+  color: #7ec8e3;
+  text-shadow: 0 0 20px rgba(126,200,227,0.4);
+  letter-spacing: 6px;
+}
+
+/* ── Game Container ── */
+#game {
+  width: 100%;
+  max-width: 900px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 12px 20px;
+  flex: 1;
+}
+
+/* ── Card ── */
+.card {
+  width: 64px;
+  height: 90px;
+  border-radius: 7px;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.card:hover:not(.disabled) {
+  transform: translateY(-4px);
+  box-shadow: 0 6px 20px rgba(126,200,227,0.3);
+}
+
+.card.face-up {
+  background: #fff;
+  border: 2px solid #bbb;
+  color: #333;
+}
+
+.card.face-up.red { color: #c0392b; }
+.card.face-up.black { color: #222; }
+
+.card.face-down {
+  background: linear-gradient(135deg, #1a3a5c 0%, #2a5a8c 50%, #1a3a5c 100%);
+  border: 2px solid #3a7abd;
+  color: transparent;
+}
+
+.card.face-down::after {
+  content: '⚓';
+  font-size: 1.6rem;
+  color: rgba(126,200,227,0.4);
+}
+
+/* Player's own hidden position card - shows value but with overlay */
+.card.hidden-from-enemy {
+  background: #fff;
+  border: 2px solid #3a7abd;
+  position: relative;
+}
+
+.card.hidden-from-enemy::before {
+  content: '隱';
+  position: absolute;
+  top: 2px;
+  right: 3px;
+  font-size: 0.5rem;
+  color: #3a7abd;
+  font-weight: bold;
+  background: rgba(58,122,189,0.15);
+  border-radius: 3px;
+  padding: 0 3px;
+}
+
+.card.hidden-from-enemy::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 5px;
+  background: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 4px,
+    rgba(58,122,189,0.06) 4px,
+    rgba(58,122,189,0.06) 8px
+  );
+  pointer-events: none;
+}
+
+.card.selected {
+  box-shadow: 0 0 0 3px #f1c40f, 0 0 15px rgba(241,196,15,0.5);
+  transform: translateY(-6px);
+}
+
+.card.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.card .suit { font-size: 1.3rem; line-height: 1; }
+.card .rank { font-size: 0.85rem; line-height: 1; margin-top: 2px; }
+
+.card.torpedo-card.face-up {
+  border-color: #e74c3c;
+  background: linear-gradient(135deg, #fff5f5, #ffe0e0);
+}
+
+.card.empty-slot {
+  background: rgba(126,200,227,0.08);
+  border: 2px dashed rgba(126,200,227,0.25);
+  cursor: default;
+  color: rgba(126,200,227,0.25);
+  font-size: 0.75rem;
+}
+
+.card.empty-slot:hover { transform: none; box-shadow: none; }
+
+/* ── Zones ── */
+.zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px;
+  border-radius: 10px;
+}
+
+.zone-label {
+  font-size: 0.75rem;
+  color: #7ec8e3;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.card-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: nowrap;
+}
+
+.axis-label {
+  font-size: 0.65rem;
+  color: #5a9ab5;
+  text-align: center;
+  margin-top: 2px;
+  letter-spacing: 1px;
+}
+
+.position-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* ── AI Area ── */
+#ai-area {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(126,200,227,0.12);
+}
+
+#ai-area .zone-label { color: #e74c3c; }
+
+/* ── Player Area ── */
+#player-area {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(126,200,227,0.12);
+}
+
+/* ── Center ── */
+#center-area {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 30px;
+  padding: 8px;
+}
+
+.pile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.pile-card {
+  width: 52px;
+  height: 72px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: bold;
+}
+
+.pile-card.draw-pile {
+  background: linear-gradient(135deg, #1a3a5c, #2a5a8c);
+  border: 2px solid #3a7abd;
+  color: #7ec8e3;
+}
+
+.pile-card.discard-pile {
+  background: rgba(126,200,227,0.08);
+  border: 2px dashed rgba(126,200,227,0.2);
+  color: #5a8a9a;
+}
+
+.pile-label {
+  font-size: 0.7rem;
+  color: #5a9ab5;
+}
+
+/* ── Messages ── */
+#message-area {
+  background: rgba(0,0,0,0.3);
+  border: 1px solid rgba(126,200,227,0.15);
+  border-radius: 8px;
+  padding: 10px 14px;
+  min-height: 60px;
+  max-height: 100px;
+  overflow-y: auto;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+#message-area .msg {
+  padding: 2px 0;
+  border-bottom: 1px solid rgba(126,200,227,0.06);
+}
+
+#message-area .msg:last-child { border-bottom: none; }
+#message-area .msg.info { color: #7ec8e3; }
+#message-area .msg.warn { color: #f39c12; }
+#message-area .msg.success { color: #2ecc71; }
+#message-area .msg.danger { color: #e74c3c; }
+
+/* ── Phase Indicator ── */
+#phase-bar {
+  text-align: center;
+  padding: 6px;
+  font-size: 0.9rem;
+  color: #f1c40f;
+  font-weight: bold;
+  letter-spacing: 1px;
+  min-height: 32px;
+}
+
+/* ── Hand ── */
+#hand-area {
+  padding: 8px;
+}
+
+#hand-row {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* ── Action Buttons ── */
+#action-bar {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+  padding: 6px;
+}
+
+.btn {
+  padding: 8px 20px;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+
+.btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #2980b9, #3498db);
+  color: #fff;
+}
+
+.btn-success {
+  background: linear-gradient(135deg, #27ae60, #2ecc71);
+  color: #fff;
+}
+
+.btn-danger {
+  background: linear-gradient(135deg, #c0392b, #e74c3c);
+  color: #fff;
+}
+
+.btn-warning {
+  background: linear-gradient(135deg, #d68910, #f39c12);
+  color: #fff;
+}
+
+.btn-secondary {
+  background: rgba(126,200,227,0.15);
+  color: #7ec8e3;
+  border: 1px solid rgba(126,200,227,0.3);
+}
+
+/* ── Modal ── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 300;
+}
+
+.modal {
+  background: #1a2a3f;
+  border: 2px solid #3a7abd;
+  border-radius: 12px;
+  padding: 24px 32px;
+  text-align: center;
+  max-width: 400px;
+  width: 90%;
+}
+
+.modal h2 {
+  margin-bottom: 12px;
+  color: #7ec8e3;
+  font-size: 1.3rem;
+}
+
+.modal p {
+  margin-bottom: 16px;
+  line-height: 1.6;
+}
+
+.modal .btn { margin: 0 6px; }
+
+/* ── Start Screen ── */
+#start-screen {
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(180deg, #0a1628 0%, #122a4a 50%, #0a1628 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+
+#start-screen h1 {
+  font-size: 2.5rem;
+  margin-bottom: 16px;
+  letter-spacing: 12px;
+}
+
+#start-screen p {
+  color: #5a9ab5;
+  margin-bottom: 30px;
+  font-size: 1rem;
+}
+
+#start-screen .btn {
+  font-size: 1.2rem;
+  padding: 14px 40px;
+}
+
+/* ── Torpedo zone ── */
+.torpedo-zone {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.torpedo-slot {
+  width: 64px;
+  height: 44px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+}
+
+.torpedo-slot.empty {
+  background: rgba(231,76,60,0.08);
+  border: 1px dashed rgba(231,76,60,0.25);
+  color: rgba(231,76,60,0.3);
+}
+
+.torpedo-slot.loaded {
+  background: linear-gradient(135deg, #ffe0e0, #fff5f5);
+  border: 2px solid #e74c3c;
+  color: #c0392b;
+  font-weight: bold;
+  font-size: 0.85rem;
+}
+
+/* ── Reveal overlay ── */
+.reveal-cards {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin: 12px 0;
+}
+
+/* ── Rules button ── */
+#rules-btn {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  z-index: 50;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(126,200,227,0.15);
+  border: 1px solid rgba(126,200,227,0.3);
+  color: #7ec8e3;
+  font-size: 1.1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#rules-btn:hover {
+  background: rgba(126,200,227,0.3);
+}
+
+.modal .rules-text {
+  text-align: left;
+  font-size: 0.8rem;
+  line-height: 1.7;
+  max-height: 50vh;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+.modal .rules-text h3 {
+  color: #7ec8e3;
+  margin: 10px 0 4px;
+  font-size: 0.9rem;
+}
+
+/* ── Nickname input ── */
+#start-screen input {
+  display: block;
+  margin: 0 auto 20px;
+  padding: 10px 16px;
+  width: 220px;
+  border: 2px solid rgba(126,200,227,0.4);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.08);
+  color: #e0e8f0;
+  font-size: 1rem;
+  text-align: center;
+  font-family: inherit;
+  outline: none;
+}
+
+#start-screen input::placeholder { color: rgba(126,200,227,0.4); }
+#start-screen input:focus { border-color: #7ec8e3; }
+
+#start-screen .btn-row {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* ── Stats bar ── */
+#stats-bar {
+  text-align: center;
+  font-size: 0.75rem;
+  color: #5a9ab5;
+  padding: 2px 0;
+}
+
+#stats-bar span { margin: 0 6px; }
+#stats-bar .win-count { color: #2ecc71; }
+#stats-bar .loss-count { color: #e74c3c; }
+
+/* ── Leaderboard ── */
+.leaderboard-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  margin-top: 10px;
+}
+
+.leaderboard-table th {
+  color: #7ec8e3;
+  border-bottom: 1px solid rgba(126,200,227,0.2);
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.leaderboard-table td {
+  padding: 5px 8px;
+  border-bottom: 1px solid rgba(126,200,227,0.06);
+}
+
+.leaderboard-table tr:hover td {
+  background: rgba(126,200,227,0.05);
+}
+
+.leaderboard-table .rank-col { width: 36px; text-align: center; }
+.leaderboard-table .rate-col { width: 60px; text-align: right; }
+.leaderboard-table .games-col { width: 50px; text-align: right; color: #5a9ab5; }
+
+.lb-loading {
+  text-align: center;
+  padding: 20px;
+  color: #5a9ab5;
+}
+
+/* ── Responsive ── */
+@media (max-width: 600px) {
+  .card { width: 52px; height: 74px; font-size: 0.85rem; }
+  .card .suit { font-size: 1.1rem; }
+  .card .rank { font-size: 0.75rem; }
+  h1 { font-size: 1.2rem; letter-spacing: 4px; }
+  .torpedo-slot { width: 52px; height: 38px; }
+}
+</style>
+</head>
+<body>
+
+<!-- Start Screen -->
+<div id="start-screen">
+  <h1>沉默的艦隊</h1>
+  <p>潛艇戰略撲克牌遊戲</p>
+  <input id="nickname-input" type="text" placeholder="輸入你的暱稱" maxlength="20">
+  <div class="btn-row">
+    <button class="btn btn-primary" onclick="startGame()">開始遊戲</button>
+    <button class="btn btn-secondary" onclick="showLeaderboard()">排行榜</button>
+  </div>
+</div>
+
+<!-- Rules Button -->
+<button id="rules-btn" style="display:none" onclick="showRules()" title="遊戲規則">?</button>
+
+<!-- Game -->
+<h1 id="game-title" style="display:none">沉默的艦隊</h1>
+<div id="stats-bar" style="display:none"></div>
+<div id="game" style="display:none">
+
+  <!-- AI Area -->
+  <div id="ai-area" class="zone">
+    <div class="zone-label">⬆ 敵方潛艇</div>
+    <div id="ai-torpedoes" class="torpedo-zone"></div>
+    <div id="ai-positions" class="card-row"></div>
+    <div id="ai-axis-labels" class="card-row" style="gap:8px"></div>
+  </div>
+
+  <!-- Center -->
+  <div id="center-area">
+    <div class="pile">
+      <div id="draw-pile" class="pile-card draw-pile">--</div>
+      <div class="pile-label">抽牌堆</div>
+    </div>
+    <div class="pile">
+      <div id="discard-pile" class="pile-card discard-pile">--</div>
+      <div class="pile-label">棄牌堆</div>
+    </div>
+  </div>
+
+  <!-- Phase -->
+  <div id="phase-bar"></div>
+
+  <!-- Messages -->
+  <div id="message-area"></div>
+
+  <!-- Player Area -->
+  <div id="player-area" class="zone">
+    <div id="player-axis-labels" class="card-row" style="gap:8px"></div>
+    <div id="player-positions" class="card-row"></div>
+    <div id="player-torpedoes" class="torpedo-zone"></div>
+    <div class="zone-label">⬇ 我方潛艇</div>
+  </div>
+
+  <!-- Hand -->
+  <div id="hand-area">
+    <div style="text-align:center;margin-bottom:4px;font-size:0.75rem;color:#5a9ab5">手牌</div>
+    <div id="hand-row" class="card-row"></div>
+  </div>
+
+  <!-- Actions -->
+  <div id="action-bar"></div>
+</div>
+
+<!-- Modal Container -->
+<div id="modal-container"></div>
+
+<script>
+// ══════════════════════════════════════
+//  Supabase Config — 替換成你自己的值
+// ══════════════════════════════════════
+const SUPABASE_URL = 'https://xdcqvpdpuiyhejiekuyy.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhkY3F2cGRwdWl5aGVqaWVrdXl5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzODc1NjEsImV4cCI6MjA5MTk2MzU2MX0.ir80YJCk8CvrXfekTnvqgrSSF83WV7U66J2xm-NY4hA';
+
+let sbClient = null;
+let currentNickname = '';
+
+function initSupabase() {
+  if (SUPABASE_URL === 'YOUR_SUPABASE_URL' || !window.supabase) return;
+  sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+}
+
+// ══════════════════════════════════════
+//  Player Stats (Supabase)
+// ══════════════════════════════════════
+async function recordResult(isWin) {
+  if (!sbClient || !currentNickname) return;
+  try {
+    // Try to get existing player
+    const { data: existing } = await sbClient
+      .from('players')
+      .select('*')
+      .eq('nickname', currentNickname)
+      .single();
+
+    if (existing) {
+      await sbClient.from('players').update({
+        wins: existing.wins + (isWin ? 1 : 0),
+        losses: existing.losses + (isWin ? 0 : 1),
+      }).eq('nickname', currentNickname);
+    } else {
+      await sbClient.from('players').insert({
+        nickname: currentNickname,
+        wins: isWin ? 1 : 0,
+        losses: isWin ? 0 : 1,
+      });
+    }
+  } catch (e) {
+    console.warn('Failed to record result:', e);
+  }
+  updateStatsBar();
+}
+
+async function getMyStats() {
+  if (!sbClient || !currentNickname) return null;
+  try {
+    const { data } = await sbClient
+      .from('players')
+      .select('*')
+      .eq('nickname', currentNickname)
+      .single();
+    return data;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function updateStatsBar() {
+  const bar = document.getElementById('stats-bar');
+  if (!currentNickname) {
+    bar.innerHTML = '';
+    return;
+  }
+  const stats = await getMyStats();
+  if (stats) {
+    const total = stats.wins + stats.losses;
+    const rate = total > 0 ? Math.round(stats.wins / total * 100) : 0;
+    bar.innerHTML = `${currentNickname} | <span class="win-count">${stats.wins} 勝</span><span class="loss-count">${stats.losses} 敗</span><span>勝率 ${rate}%</span>`;
+  } else {
+    bar.innerHTML = `${currentNickname} | 尚無戰績`;
+  }
+}
+
+async function fetchLeaderboard() {
+  if (!sbClient) return [];
+  try {
+    const { data } = await sbClient
+      .from('players')
+      .select('nickname, wins, losses')
+      .order('wins', { ascending: false })
+      .limit(20);
+    return data || [];
+  } catch (e) {
+    console.warn('Failed to fetch leaderboard:', e);
+    return [];
+  }
+}
+
+async function showLeaderboard() {
+  const container = document.getElementById('modal-container');
+  container.innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal" style="max-width:460px">
+        <h2>排行榜</h2>
+        <div class="lb-loading">載入中...</div>
+        <div style="margin-top:14px">
+          <button class="btn btn-primary" onclick="closeModal()">關閉</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  if (!sbClient) {
+    container.querySelector('.lb-loading').innerHTML = '排行榜尚未設定（需要 Supabase 連線）';
+    return;
+  }
+
+  const data = await fetchLeaderboard();
+  if (data.length === 0) {
+    container.querySelector('.lb-loading').innerHTML = '目前還沒有任何戰績紀錄';
+    return;
+  }
+
+  let rows = data.map((p, i) => {
+    const total = p.wins + p.losses;
+    const rate = total > 0 ? Math.round(p.wins / total * 100) : 0;
+    const highlight = p.nickname === currentNickname ? ' style="color:#f1c40f;font-weight:bold"' : '';
+    return `<tr${highlight}>
+      <td class="rank-col">${i + 1}</td>
+      <td>${p.nickname}</td>
+      <td class="rate-col">${rate}%</td>
+      <td class="games-col">${p.wins}W ${p.losses}L</td>
+    </tr>`;
+  }).join('');
+
+  container.querySelector('.lb-loading').innerHTML = `
+    <table class="leaderboard-table">
+      <thead><tr><th class="rank-col">#</th><th>玩家</th><th class="rate-col">勝率</th><th class="games-col">戰績</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+// ══════════════════════════════════════
+//  Card Helpers
+// ══════════════════════════════════════
+const SUITS = ['♠','♥','♦','♣'];
+const SUIT_COLORS = {'♠':'black','♣':'black','♥':'red','♦':'red'};
+const RANKS = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+
+function rankValue(rank) {
+  if (rank === 'A') return 1;
+  if (rank === 'J') return 11;
+  if (rank === 'Q') return 12;
+  if (rank === 'K') return 13;
+  return parseInt(rank);
+}
+
+function isFuel(card) {
+  const v = rankValue(card.rank);
+  return v >= 1 && v <= 9;
+}
+
+function isTorpedo(card) {
+  const v = rankValue(card.rank);
+  return v >= 10;
+}
+
+function cardId(card) { return card.suit + card.rank; }
+
+function createDeck() {
+  const deck = [];
+  for (const s of SUITS)
+    for (const r of RANKS)
+      deck.push({ suit: s, rank: r });
+  return deck;
+}
+
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+// ══════════════════════════════════════
+//  Game State
+// ══════════════════════════════════════
+let G = {}; // global game state
+
+function initGame() {
+  let deck = shuffle(createDeck());
+
+  // Deal 3 fuel position cards to each player
+  const playerPos = [];
+  const aiPos = [];
+  const torpedosSidelined = [];
+
+  // Player positions
+  while (playerPos.length < 3) {
+    const c = deck.shift();
+    if (isFuel(c)) {
+      playerPos.push({ ...c, faceUp: true });
+    } else {
+      torpedosSidelined.push(c);
+    }
+  }
+
+  // AI positions
+  while (aiPos.length < 3) {
+    const c = deck.shift();
+    if (isFuel(c)) {
+      aiPos.push({ ...c, faceUp: true });
+    } else {
+      torpedosSidelined.push(c);
+    }
+  }
+
+  // Put sidelined torpedoes back, reshuffle
+  deck = shuffle([...deck, ...torpedosSidelined]);
+
+  // Deal 5 cards each
+  const playerHand = deck.splice(0, 5);
+  const aiHand = deck.splice(0, 5);
+
+  G = {
+    drawPile: deck,
+    discardPile: [],
+    player: {
+      positions: playerPos,       // [{suit,rank,faceUp}] x3
+      torpedoes: [],              // loaded torpedoes (max 2)
+      hand: playerHand,
+      torpedoesLoadedThisTurn: false,
+      sunk: false,
+    },
+    ai: {
+      positions: aiPos,
+      torpedoes: [],
+      hand: aiHand,
+      torpedoesLoadedThisTurn: false,
+      sunk: false,
+    },
+    currentPlayer: 'player',    // 'player' or 'ai'
+    phase: 'start',             // state machine phase
+    selectedHandCard: null,     // index in hand
+    selectedPositions: [],      // indices of selected position cards for attack
+    turnNumber: 0,
+    messages: [],
+    // AI memory: track known player position cards
+    aiMemory: {
+      knownPositions: [null, null, null], // what AI knows about player positions
+    },
+  };
+
+  // AI starts knowing player's initial (face-up) position cards
+  for (let i = 0; i < 3; i++) {
+    G.aiMemory.knownPositions[i] = { ...G.player.positions[i] };
+  }
+}
+
+// ══════════════════════════════════════
+//  Draw Pile Management
+// ══════════════════════════════════════
+function drawCard() {
+  if (G.drawPile.length === 0) {
+    if (G.discardPile.length === 0) return null;
+    G.drawPile = shuffle([...G.discardPile]);
+    G.discardPile = [];
+    addMsg('棄牌堆重新洗入抽牌堆', 'info');
+  }
+  return G.drawPile.shift();
+}
+
+function discard(card) {
+  G.discardPile.push(card);
+}
+
+// ══════════════════════════════════════
+//  Messages
+// ══════════════════════════════════════
+function addMsg(text, cls = 'info') {
+  G.messages.push({ text, cls });
+  if (G.messages.length > 50) G.messages.shift();
+}
+
+// ══════════════════════════════════════
+//  Rendering
+// ══════════════════════════════════════
+function renderCard(card, faceUp, extra = '') {
+  if (!card) return `<div class="card empty-slot ${extra}">空</div>`;
+
+  if (!faceUp) {
+    return `<div class="card face-down ${extra}"></div>`;
+  }
+
+  const color = SUIT_COLORS[card.suit];
+  const torpClass = isTorpedo(card) ? 'torpedo-card' : '';
+  return `<div class="card face-up ${color} ${torpClass} ${extra}">
+    <span class="suit">${card.suit}</span>
+    <span class="rank">${card.rank}</span>
+  </div>`;
+}
+
+function renderTorpedoSlot(card) {
+  if (!card) return `<div class="torpedo-slot empty">魚雷</div>`;
+  return `<div class="torpedo-slot loaded">${card.suit}${card.rank}</div>`;
+}
+
+function render() {
+  // AI positions (X Y Z order, same as player for easy comparison)
+  const aiPosEl = document.getElementById('ai-positions');
+  const aiAxisEl = document.getElementById('ai-axis-labels');
+  let aiPosHtml = '';
+  let aiAxisHtml = '';
+  const aiLabels = ['X', 'Y', 'Z'];
+  for (let i = 0; i < 3; i++) {
+    const p = G.ai.positions[i];
+    const isTarget = G.phase === 'attack-select' && G.selectedPositions.includes(i);
+    const show = p.faceUp;
+    aiPosHtml += `<div class="position-col">${renderCard(p, show, isTarget ? 'selected' : '')}</div>`;
+    aiAxisHtml += `<div class="axis-label" style="width:64px">${aiLabels[i]}</div>`;
+  }
+  aiPosEl.innerHTML = aiPosHtml;
+  aiAxisEl.innerHTML = aiAxisHtml;
+
+  // AI torpedoes
+  const aiTorpEl = document.getElementById('ai-torpedoes');
+  let aiTorpHtml = '';
+  for (let i = 0; i < 2; i++) {
+    aiTorpHtml += renderTorpedoSlot(G.ai.torpedoes[i] || null);
+  }
+  aiTorpEl.innerHTML = aiTorpHtml;
+
+  // Player positions (X Y Z order)
+  const plPosEl = document.getElementById('player-positions');
+  const plAxisEl = document.getElementById('player-axis-labels');
+  let plPosHtml = '';
+  let plAxisHtml = '';
+  const plLabels = ['X', 'Y', 'Z'];
+  for (let i = 0; i < 3; i++) {
+    const p = G.player.positions[i];
+    const clickable = canClickPosition(i);
+    const selected = G.selectedPositions.includes(i);
+    const hiddenClass = !p.faceUp ? ' hidden-from-enemy' : '';
+    plPosHtml += `<div class="position-col">${renderCard(p, true,
+      (clickable ? 'clickable' : '') + (selected ? ' selected' : '') + hiddenClass
+    )}</div>`;
+    plAxisHtml += `<div class="axis-label" style="width:64px">${plLabels[i]}</div>`;
+  }
+
+  // Add click handlers for player positions
+  plPosEl.innerHTML = plPosHtml;
+  plAxisEl.innerHTML = plAxisHtml;
+
+  const posCards = plPosEl.querySelectorAll('.position-col');
+  posCards.forEach((el, idx) => {
+    el.addEventListener('click', () => onPositionClick(idx));
+  });
+
+  // Player torpedoes
+  const plTorpEl = document.getElementById('player-torpedoes');
+  let plTorpHtml = '';
+  for (let i = 0; i < 2; i++) {
+    plTorpHtml += renderTorpedoSlot(G.player.torpedoes[i] || null);
+  }
+  plTorpEl.innerHTML = plTorpHtml;
+
+  // Hand
+  const handEl = document.getElementById('hand-row');
+  let handHtml = '';
+  G.player.hand.forEach((c, idx) => {
+    const sel = G.selectedHandCard === idx ? 'selected' : '';
+    const canUse = canClickHand(idx);
+    handHtml += `<div class="hand-card" data-idx="${idx}">
+      ${renderCard(c, true, sel + (canUse ? '' : ' disabled'))}
+    </div>`;
+  });
+  handEl.innerHTML = handHtml;
+  handEl.querySelectorAll('.hand-card').forEach(el => {
+    el.addEventListener('click', () => onHandClick(parseInt(el.dataset.idx)));
+  });
+
+  // Piles
+  document.getElementById('draw-pile').textContent = G.drawPile.length;
+  document.getElementById('discard-pile').textContent = G.discardPile.length;
+
+  // Messages
+  const msgEl = document.getElementById('message-area');
+  msgEl.innerHTML = G.messages.slice(-8).map(m => `<div class="msg ${m.cls}">${m.text}</div>`).join('');
+  msgEl.scrollTop = msgEl.scrollHeight;
+
+  // Phase bar
+  renderPhaseBar();
+
+  // Action buttons
+  renderActions();
+}
+
+function canClickPosition(idx) {
+  if (G.currentPlayer !== 'player') return false;
+  if (G.phase === 'move' || G.phase === 'optional-move') {
+    return G.selectedHandCard !== null;
+  }
+  if (G.phase === 'attack-select') return true;
+  return false;
+}
+
+function canClickHand(idx) {
+  if (G.currentPlayer !== 'player') return false;
+  const card = G.player.hand[idx];
+  if (G.phase === 'move' || G.phase === 'optional-move') {
+    return isFuel(card);
+  }
+  if (G.phase === 'load-torpedoes') {
+    return isTorpedo(card);
+  }
+  if (G.phase === 'discard') {
+    return isFuel(card);
+  }
+  return false;
+}
+
+function renderPhaseBar() {
+  const bar = document.getElementById('phase-bar');
+  const labels = {
+    'draw': '📥 抽牌階段',
+    'move': '🔄 強制移動 — 選擇手牌中的燃料牌，再點擊要替換的位置牌',
+    'attack-must': '💣 攻擊階段 — 魚雷室有魚雷，必須攻擊',
+    'attack-select': '🎯 選擇 2 張位置牌進行攻擊',
+    'optional-move': '🔄 選擇性移動 — 可以移動或跳過',
+    'load-torpedoes': '🔧 裝填魚雷 — 選擇魚雷牌裝入魚雷室',
+    'discard': '🗑️ 棄牌 — 手牌超過 5 張，請棄掉燃料牌',
+    'ai-turn': '🤖 對方回合...',
+    'game-over': '🏁 遊戲結束',
+    'no-fuel-reveal': '⚠️ 手牌中沒有燃料牌 — 展示手牌給對方看',
+  };
+  bar.textContent = labels[G.phase] || '';
+}
+
+function renderActions() {
+  const bar = document.getElementById('action-bar');
+  let html = '';
+
+  if (G.phase === 'optional-move') {
+    html += `<button class="btn btn-secondary" onclick="skipOptionalMove()">跳過移動</button>`;
+  }
+
+  if (G.phase === 'load-torpedoes') {
+    const canLoad = G.player.hand.some(c => isTorpedo(c)) && G.player.torpedoes.length < 2;
+    if (!canLoad) {
+      html += `<button class="btn btn-secondary" onclick="skipLoadTorpedoes()">不裝填魚雷</button>`;
+    } else {
+      html += `<button class="btn btn-warning" onclick="confirmLoadTorpedoes()">完成裝填</button>`;
+      html += `<button class="btn btn-secondary" onclick="skipLoadTorpedoes()">不裝填</button>`;
+    }
+  }
+
+  if (G.phase === 'attack-select') {
+    const canConfirm = G.selectedPositions.length === 2;
+    html += `<button class="btn btn-danger" ${canConfirm ? '' : 'disabled'} onclick="executeAttack()">發射魚雷！</button>`;
+  }
+
+  if (G.phase === 'no-fuel-reveal') {
+    html += `<button class="btn btn-primary" onclick="acknowledgeNoFuel()">確認（已展示）</button>`;
+  }
+
+  if (G.phase === 'game-over') {
+    html += `<button class="btn btn-primary" onclick="startGame()">再玩一局</button>`;
+  }
+
+  bar.innerHTML = html;
+}
+
+// ══════════════════════════════════════
+//  Player Interactions
+// ══════════════════════════════════════
+function onHandClick(idx) {
+  if (G.currentPlayer !== 'player') return;
+  const card = G.player.hand[idx];
+
+  if (G.phase === 'move' || G.phase === 'optional-move') {
+    if (!isFuel(card)) return;
+    G.selectedHandCard = (G.selectedHandCard === idx) ? null : idx;
+    G.selectedPositions = [];
+    render();
+    return;
+  }
+
+  if (G.phase === 'load-torpedoes') {
+    if (!isTorpedo(card)) return;
+    if (G.player.torpedoes.length >= 2) {
+      addMsg('魚雷室已滿（最多 2 枚）', 'warn');
+      render();
+      return;
+    }
+    G.player.torpedoes.push(card);
+    G.player.hand.splice(idx, 1);
+    addMsg(`裝填魚雷 ${card.suit}${card.rank}`, 'info');
+    G.selectedHandCard = null;
+    render();
+    return;
+  }
+
+  if (G.phase === 'discard') {
+    if (!isFuel(card)) {
+      addMsg('只能棄掉燃料牌', 'warn');
+      render();
+      return;
+    }
+    discard(card);
+    G.player.hand.splice(idx, 1);
+    addMsg(`棄掉 ${card.suit}${card.rank}`, 'info');
+    if (G.player.hand.length <= 5) {
+      endPlayerTurn();
+    }
+    render();
+    return;
+  }
+}
+
+function onPositionClick(idx) {
+  if (G.currentPlayer !== 'player') return;
+
+  if ((G.phase === 'move' || G.phase === 'optional-move') && G.selectedHandCard !== null) {
+    executeMove(idx);
+    return;
+  }
+
+  if (G.phase === 'attack-select') {
+    if (G.selectedPositions.includes(idx)) {
+      G.selectedPositions = G.selectedPositions.filter(i => i !== idx);
+    } else {
+      if (G.selectedPositions.length < 2) {
+        G.selectedPositions.push(idx);
+      }
+    }
+    render();
+    return;
+  }
+}
+
+function executeMove(posIdx) {
+  const handIdx = G.selectedHandCard;
+  const newCard = G.player.hand[handIdx];
+  const oldCard = G.player.positions[posIdx];
+
+  const diff = Math.abs(rankValue(newCard.rank) - rankValue(oldCard.rank));
+  const isLowSpeed = diff <= 2;
+
+  // Remove from hand, put old card to discard
+  G.player.hand.splice(handIdx, 1);
+
+  // Show replaced card to opponent (AI sees it)
+  addMsg(`移動：替換位置牌 ${oldCard.suit}${oldCard.rank}`, 'info');
+
+  // AI memory: the old card is no longer at that position
+  // AI sees the replaced card being discarded
+  discard(oldCard);
+
+  if (isLowSpeed) {
+    // Player chooses face-up or face-down
+    showModal('低速移動', '新的位置牌要亮牌還是蓋牌？', [
+      { text: '蓋牌（隱藏）', cls: 'btn-primary', action: () => {
+        G.player.positions[posIdx] = { ...newCard, faceUp: false };
+        // AI doesn't know the new card
+        G.aiMemory.knownPositions[posIdx] = null;
+        addMsg('低速移動：位置牌已蓋住', 'info');
+        afterMove();
+      }},
+      { text: '亮牌', cls: 'btn-secondary', action: () => {
+        G.player.positions[posIdx] = { ...newCard, faceUp: true };
+        G.aiMemory.knownPositions[posIdx] = { ...newCard };
+        addMsg(`低速移動：位置牌亮出 ${newCard.suit}${newCard.rank}`, 'info');
+        afterMove();
+      }},
+    ]);
+  } else {
+    // High speed: must face up
+    G.player.positions[posIdx] = { ...newCard, faceUp: true };
+    G.aiMemory.knownPositions[posIdx] = { ...newCard };
+    addMsg(`高速移動：位置牌亮出 ${newCard.suit}${newCard.rank}`, 'warn');
+    afterMove();
+  }
+}
+
+function afterMove() {
+  G.selectedHandCard = null;
+  G.selectedPositions = [];
+
+  // Check if there are torpedoes to fire
+  if (G.player.torpedoes.length > 0 && !G.player.torpedoesLoadedThisTurn) {
+    G.phase = 'attack-select';
+    addMsg('魚雷室有魚雷，必須攻擊！', 'danger');
+  } else if (G.player.torpedoesLoadedThisTurn && G.player.torpedoes.length > 0) {
+    // Torpedoes loaded this turn can't fire yet
+    proceedAfterAttackCycle();
+  } else {
+    proceedAfterAttackCycle();
+  }
+  render();
+}
+
+function executeAttack() {
+  if (G.selectedPositions.length !== 2) return;
+
+  const [i, j] = G.selectedPositions;
+  const myCards = [G.player.positions[i], G.player.positions[j]];
+
+  // Reveal selected positions to opponent
+  addMsg(`攻擊！公開位置牌：${myCards[0].suit}${myCards[0].rank}(${['X','Y','Z'][i]}) 和 ${myCards[1].suit}${myCards[1].rank}(${['X','Y','Z'][j]})`, 'danger');
+
+  // Make them face-up
+  G.player.positions[i].faceUp = true;
+  G.player.positions[j].faceUp = true;
+
+  // AI updates memory
+  G.aiMemory.knownPositions[i] = { ...G.player.positions[i] };
+  G.aiMemory.knownPositions[j] = { ...G.player.positions[j] };
+
+  // Check if AI's corresponding positions match
+  const aiCard_i = G.ai.positions[i];
+  const aiCard_j = G.ai.positions[j];
+
+  const hit_i = myCards[0].rank === aiCard_i.rank && myCards[0].suit === aiCard_i.suit;
+  const hit_j = myCards[1].rank === aiCard_j.rank && myCards[1].suit === aiCard_j.suit;
+
+  // Consume one torpedo
+  const usedTorp = G.player.torpedoes.shift();
+  discard(usedTorp);
+
+  if (hit_i && hit_j) {
+    // Attack success!
+    addMsg('🎉 攻擊命中！敵方潛艇被擊沉！', 'success');
+    G.ai.sunk = true;
+    // Reveal all AI positions
+    G.ai.positions.forEach(p => p.faceUp = true);
+    G.phase = 'game-over';
+    recordResult(true);
+    showModal('🎉 勝利！', '你成功擊沉了敵方潛艇！', [
+      { text: '再玩一局', cls: 'btn-primary', action: () => startGame() },
+      { text: '排行榜', cls: 'btn-secondary', action: () => showLeaderboard() },
+    ]);
+  } else {
+    addMsg('攻擊失敗！對方回報：未命中', 'warn');
+    G.selectedPositions = [];
+
+    // After attack, optional move
+    if (G.player.torpedoes.length > 0) {
+      // Still have torpedoes, optional move then attack again
+      G.phase = 'optional-move';
+    } else {
+      // No more torpedoes
+      G.phase = 'optional-move';
+    }
+  }
+
+  render();
+}
+
+function skipOptionalMove() {
+  G.selectedHandCard = null;
+  // Check if still have torpedoes to fire
+  if (G.player.torpedoes.length > 0 && !G.player.torpedoesLoadedThisTurn) {
+    G.phase = 'attack-select';
+    G.selectedPositions = [];
+    addMsg('魚雷室仍有魚雷，繼續攻擊', 'danger');
+  } else {
+    proceedAfterAttackCycle();
+  }
+  render();
+}
+
+function proceedAfterAttackCycle() {
+  // All torpedoes fired (or none). Ask about loading torpedoes.
+  if (G.player.torpedoes.length === 0 && !G.player.torpedoesLoadedThisTurn) {
+    const hasTorpedoInHand = G.player.hand.some(c => isTorpedo(c));
+    if (hasTorpedoInHand) {
+      G.phase = 'load-torpedoes';
+      addMsg('是否要裝填魚雷？', 'info');
+    } else {
+      checkDiscard();
+    }
+  } else {
+    checkDiscard();
+  }
+}
+
+function confirmLoadTorpedoes() {
+  if (G.player.torpedoes.length > 0) {
+    G.player.torpedoesLoadedThisTurn = true;
+    addMsg(`已裝填 ${G.player.torpedoes.length} 枚魚雷，下回合必須全數攻擊`, 'warn');
+  }
+  checkDiscard();
+  render();
+}
+
+function skipLoadTorpedoes() {
+  if (G.player.torpedoes.length > 0) {
+    G.player.torpedoesLoadedThisTurn = true;
+    addMsg(`已裝填 ${G.player.torpedoes.length} 枚魚雷，下回合必須全數攻擊`, 'warn');
+  }
+  checkDiscard();
+  render();
+}
+
+function checkDiscard() {
+  if (G.player.hand.length > 5) {
+    // Check for self-destruct: if torpedo cards > 5
+    const torpCount = G.player.hand.filter(c => isTorpedo(c)).length;
+    if (torpCount > 5) {
+      addMsg('💥 自爆！魚雷牌超過 5 張！', 'danger');
+      G.player.sunk = true;
+      G.phase = 'game-over';
+      recordResult(false);
+      showModal('💥 自爆！', '你的手牌中魚雷牌超過 5 張，潛艇爆炸了！', [
+        { text: '再玩一局', cls: 'btn-primary', action: () => startGame() },
+        { text: '排行榜', cls: 'btn-secondary', action: () => showLeaderboard() },
+      ]);
+      render();
+      return;
+    }
+    G.phase = 'discard';
+    addMsg(`手牌有 ${G.player.hand.length} 張，需棄到 5 張`, 'warn');
+  } else {
+    endPlayerTurn();
+  }
+  render();
+}
+
+function endPlayerTurn() {
+  G.phase = 'ai-turn';
+  G.currentPlayer = 'ai';
+  G.selectedHandCard = null;
+  G.selectedPositions = [];
+  render();
+  setTimeout(() => aiTurn(), 800);
+}
+
+function acknowledgeNoFuel() {
+  // Player has no fuel cards, skip mandatory move
+  addMsg('確認無燃料牌，跳過移動', 'info');
+  afterMove();
+  render();
+}
+
+// ══════════════════════════════════════
+//  Player Turn Start
+// ══════════════════════════════════════
+function startPlayerTurn() {
+  G.currentPlayer = 'player';
+  G.turnNumber++;
+  G.player.torpedoesLoadedThisTurn = false;
+
+  // Mark previously loaded torpedoes as ready to fire
+  // (torpedoes loaded last turn must fire this turn - they're already in the array)
+
+  addMsg(`── 第 ${G.turnNumber} 回合：你的回合 ──`, 'info');
+
+  // Draw 2 cards
+  G.phase = 'draw';
+  render();
+
+  const c1 = drawCard();
+  const c2 = drawCard();
+  if (c1) G.player.hand.push(c1);
+  if (c2) G.player.hand.push(c2);
+  addMsg(`抽了 2 張牌（手牌：${G.player.hand.length} 張）`, 'info');
+
+  // Check if player has fuel cards
+  const hasFuel = G.player.hand.some(c => isFuel(c));
+  if (!hasFuel) {
+    G.phase = 'no-fuel-reveal';
+    addMsg('⚠️ 手牌中沒有燃料牌！需展示手牌給對手', 'warn');
+  } else {
+    // Check if torpedoes need to fire (loaded last turn)
+    if (G.player.torpedoes.length > 0) {
+      G.phase = 'move';
+      addMsg('魚雷室有魚雷，移動後必須攻擊', 'warn');
+    } else {
+      G.phase = 'move';
+    }
+  }
+
+  render();
+}
+
+// ══════════════════════════════════════
+//  AI Logic
+// ══════════════════════════════════════
+function aiTurn() {
+  G.ai.torpedoesLoadedThisTurn = false;
+  addMsg('── 對方回合 ──', 'info');
+
+  // Draw 2
+  const c1 = drawCard();
+  const c2 = drawCard();
+  if (c1) G.ai.hand.push(c1);
+  if (c2) G.ai.hand.push(c2);
+  addMsg('對方抽了 2 張牌', 'info');
+  render();
+
+  // Build dynamic step generator
+  const stepFns = [
+    // Step 1: Mandatory move
+    () => {
+      if (!G.ai.hand.some(c => isFuel(c))) {
+        addMsg('對方無燃料牌，展示手牌', 'warn');
+        addMsg(`對方手牌全是魚雷牌（${G.ai.hand.length} 張）`, 'info');
+      } else {
+        aiDoMove(true);
+      }
+    },
+    // Step 2: Attack + optional move loop (fires all torpedoes)
+    () => {
+      if (G.player.sunk) return;
+      if (G.ai.torpedoes.length > 0 && !G.ai.torpedoesLoadedThisTurn) {
+        aiDoAttack();
+      }
+    },
+    () => {
+      if (G.player.sunk) return;
+      // Optional move after first attack
+      if (G.ai.torpedoes.length > 0 && !G.ai.torpedoesLoadedThisTurn) {
+        if (Math.random() < 0.6 && G.ai.hand.some(c => isFuel(c))) {
+          aiDoMove(false);
+        }
+      }
+    },
+    () => {
+      if (G.player.sunk) return;
+      // Second torpedo if still present
+      if (G.ai.torpedoes.length > 0 && !G.ai.torpedoesLoadedThisTurn) {
+        aiDoAttack();
+        if (!G.player.sunk && Math.random() < 0.5 && G.ai.hand.some(c => isFuel(c))) {
+          aiDoMove(false);
+        }
+      }
+    },
+    // Step 3: Load torpedoes
+    () => {
+      if (G.player.sunk) return;
+      if (G.ai.torpedoes.length === 0) {
+        aiMaybeLoadTorpedoes();
+      }
+    },
+    // Step 4: Discard
+    () => {
+      if (G.player.sunk) return;
+      aiDiscard();
+    },
+  ];
+
+  const executeStep = (i) => {
+    if (i >= stepFns.length || G.phase === 'game-over') {
+      if (G.phase !== 'game-over') {
+        setTimeout(() => startPlayerTurn(), 400);
+      }
+      return;
+    }
+    setTimeout(() => {
+      stepFns[i]();
+      render();
+      executeStep(i + 1);
+    }, 600);
+  };
+
+  executeStep(0);
+}
+
+function aiDoMove(mandatory) {
+  const fuelCards = [];
+  G.ai.hand.forEach((c, i) => { if (isFuel(c)) fuelCards.push({ card: c, idx: i }); });
+
+  if (fuelCards.length === 0) {
+    if (mandatory) addMsg('對方無法移動', 'info');
+    return;
+  }
+
+  // Strategy: prefer low-speed moves to stay hidden
+  let bestMove = null;
+  let bestScore = -999;
+
+  for (const fc of fuelCards) {
+    for (let pos = 0; pos < 3; pos++) {
+      const oldVal = rankValue(G.ai.positions[pos].rank);
+      const newVal = rankValue(fc.card.rank);
+      const diff = Math.abs(newVal - oldVal);
+      const isLow = diff <= 2;
+
+      let score = 0;
+      if (isLow) score += 10; // prefer low speed
+      // Slight randomness
+      score += Math.random() * 5;
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestMove = { handIdx: fc.idx, posIdx: pos, card: fc.card, isLow };
+      }
+    }
+  }
+
+  if (!bestMove) return;
+
+  const oldCard = G.ai.positions[bestMove.posIdx];
+  addMsg(`對方移動了位置牌（替換掉 ${oldCard.suit}${oldCard.rank}）`, 'info');
+
+  // Discard old card (player sees it)
+  discard(oldCard);
+
+  // Remove from hand
+  G.ai.hand.splice(bestMove.handIdx, 1);
+
+  if (bestMove.isLow) {
+    // AI usually hides (face-down) for low speed
+    const hideProbability = 0.75;
+    if (Math.random() < hideProbability) {
+      G.ai.positions[bestMove.posIdx] = { ...bestMove.card, faceUp: false };
+      addMsg('對方低速移動（蓋牌）', 'info');
+    } else {
+      G.ai.positions[bestMove.posIdx] = { ...bestMove.card, faceUp: true };
+      addMsg(`對方低速移動（亮牌 ${bestMove.card.suit}${bestMove.card.rank}）`, 'info');
+    }
+  } else {
+    G.ai.positions[bestMove.posIdx] = { ...bestMove.card, faceUp: true };
+    addMsg(`對方高速移動（亮牌 ${bestMove.card.suit}${bestMove.card.rank}）`, 'warn');
+  }
+}
+
+function aiDoAttack() {
+  if (G.ai.torpedoes.length === 0) return;
+
+  // Choose 2 positions to attack with
+  // AI strategy: pick 2 positions where it knows the player's cards
+  const known = G.aiMemory.knownPositions;
+
+  // Find positions where we have info
+  const knownIndices = [];
+  const unknownIndices = [];
+  for (let i = 0; i < 3; i++) {
+    if (known[i]) knownIndices.push(i);
+    else unknownIndices.push(i);
+  }
+
+  let attackPositions;
+  if (knownIndices.length >= 2) {
+    // Attack with 2 known positions - but we need to match our own positions
+    // Actually, the attack mechanic: AI reveals 2 of its OWN positions,
+    // and checks if player's CORRESPONDING positions match
+    // So AI should pick 2 indices where AI's position matches what AI thinks player has
+
+    const matchingPairs = [];
+    for (let i = 0; i < 3; i++) {
+      if (known[i] && G.ai.positions[i].rank === known[i].rank && G.ai.positions[i].suit === known[i].suit) {
+        matchingPairs.push(i);
+      }
+    }
+
+    if (matchingPairs.length >= 2) {
+      attackPositions = [matchingPairs[0], matchingPairs[1]];
+    } else {
+      // Random attack
+      const indices = [0, 1, 2];
+      shuffle(indices);
+      attackPositions = [indices[0], indices[1]];
+    }
+  } else {
+    // Random
+    const indices = [0, 1, 2];
+    shuffle(indices);
+    attackPositions = [indices[0], indices[1]];
+  }
+
+  const [i, j] = attackPositions;
+  const aiCards = [G.ai.positions[i], G.ai.positions[j]];
+
+  // Reveal AI's attack positions
+  G.ai.positions[i].faceUp = true;
+  G.ai.positions[j].faceUp = true;
+
+  addMsg(`對方攻擊！公開位置牌：${aiCards[0].suit}${aiCards[0].rank}(${['X','Y','Z'][i]}) 和 ${aiCards[1].suit}${aiCards[1].rank}(${['X','Y','Z'][j]})`, 'danger');
+
+  // Check player's corresponding positions
+  const plCard_i = G.player.positions[i];
+  const plCard_j = G.player.positions[j];
+
+  const hit_i = aiCards[0].rank === plCard_i.rank && aiCards[0].suit === plCard_i.suit;
+  const hit_j = aiCards[1].rank === plCard_j.rank && aiCards[1].suit === plCard_j.suit;
+
+  // Consume torpedo
+  const usedTorp = G.ai.torpedoes.shift();
+  discard(usedTorp);
+
+  if (hit_i && hit_j) {
+    addMsg('💥 你的潛艇被擊沉了！', 'danger');
+    G.player.sunk = true;
+    G.player.positions.forEach(p => p.faceUp = true);
+    G.phase = 'game-over';
+    render();
+    recordResult(false);
+    showModal('💥 戰敗！', '你的潛艇被敵方擊沉了！', [
+      { text: '再玩一局', cls: 'btn-primary', action: () => startGame() },
+      { text: '排行榜', cls: 'btn-secondary', action: () => showLeaderboard() },
+    ]);
+  } else {
+    addMsg('對方攻擊失敗！', 'success');
+  }
+}
+
+function aiMaybeLoadTorpedoes() {
+  const torpInHand = G.ai.hand.filter(c => isTorpedo(c));
+  if (torpInHand.length === 0) return;
+
+  // AI loads torpedoes if it has at least some knowledge of player positions
+  const knownCount = G.aiMemory.knownPositions.filter(p => p !== null).length;
+
+  // Load 1-2 torpedoes
+  const loadCount = Math.min(torpInHand.length, 2);
+
+  // Only load if AI thinks it has a chance (or randomly)
+  if (knownCount >= 1 || Math.random() < 0.4) {
+    for (let i = 0; i < loadCount; i++) {
+      const torpCard = torpInHand[i];
+      const handIdx = G.ai.hand.indexOf(torpCard);
+      G.ai.torpedoes.push(torpCard);
+      G.ai.hand.splice(handIdx, 1);
+    }
+    G.ai.torpedoesLoadedThisTurn = true;
+    addMsg(`對方裝填了 ${loadCount} 枚魚雷`, 'warn');
+  }
+}
+
+function aiDiscard() {
+  while (G.ai.hand.length > 5) {
+    // Must discard fuel cards only
+    const fuelIdx = G.ai.hand.findIndex(c => isFuel(c));
+    if (fuelIdx === -1) {
+      // All torpedoes, self-destruct check
+      const torpCount = G.ai.hand.filter(c => isTorpedo(c)).length;
+      if (torpCount > 5) {
+        addMsg('💥 對方自爆！魚雷牌超過 5 張！', 'success');
+        G.ai.sunk = true;
+        G.ai.positions.forEach(p => p.faceUp = true);
+        G.phase = 'game-over';
+        recordResult(true);
+        showModal('🎉 勝利！', '敵方潛艇因魚雷過載而自爆！', [
+          { text: '再玩一局', cls: 'btn-primary', action: () => startGame() },
+          { text: '排行榜', cls: 'btn-secondary', action: () => showLeaderboard() },
+        ]);
+      }
+      break;
+    }
+    const card = G.ai.hand.splice(fuelIdx, 1)[0];
+    discard(card);
+  }
+}
+
+// ══════════════════════════════════════
+//  Modal
+// ══════════════════════════════════════
+function showModal(title, body, buttons) {
+  const container = document.getElementById('modal-container');
+  let btnHtml = buttons.map((b, i) =>
+    `<button class="btn ${b.cls}" data-btn="${i}">${b.text}</button>`
+  ).join('');
+
+  container.innerHTML = `
+    <div class="modal-overlay">
+      <div class="modal">
+        <h2>${title}</h2>
+        <p>${body}</p>
+        <div>${btnHtml}</div>
+      </div>
+    </div>
+  `;
+
+  buttons.forEach((b, i) => {
+    container.querySelector(`[data-btn="${i}"]`).addEventListener('click', () => {
+      container.innerHTML = '';
+      b.action();
+    });
+  });
+}
+
+function closeModal() {
+  document.getElementById('modal-container').innerHTML = '';
+}
+
+// ══════════════════════════════════════
+//  Rules
+// ══════════════════════════════════════
+function showRules() {
+  const container = document.getElementById('modal-container');
+  container.innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal" style="max-width:520px">
+        <h2>遊戲規則</h2>
+        <div class="rules-text">
+          <h3>基本概念</h3>
+          <p>每位玩家有 3 張<b>位置牌</b>（代表 X、Y、Z 座標）和一個<b>魚雷室</b>（最多 2 枚）。</p>
+          <p><b>燃料牌</b>：A～9，用於移動。<b>魚雷牌</b>：10、J、Q、K，用於攻擊。</p>
+
+          <h3>回合流程</h3>
+          <p>1. 抽 2 張牌</p>
+          <p>2. <b>強制移動</b>：用手牌燃料牌替換一張位置牌</p>
+          <p style="padding-left:12px">- 差值 &le; 2 → 低速（可選蓋牌/亮牌）</p>
+          <p style="padding-left:12px">- 差值 &gt; 2 → 高速（必須亮牌）</p>
+          <p style="padding-left:12px">- 被替換的牌會給對手看到</p>
+          <p>3. 若魚雷室有魚雷 → <b>攻擊</b></p>
+          <p style="padding-left:12px">- 選自己 2 張位置牌公開</p>
+          <p style="padding-left:12px">- 對手相同位置都一樣 → 擊沉！</p>
+          <p>4. 攻擊後可再移動一次（選擇性）</p>
+          <p>5. 可裝填魚雷（下回合必須全數攻擊）</p>
+          <p>6. 手牌超過 5 張需棄牌（只能棄燃料牌）</p>
+          <p>7. 手中魚雷牌超過 5 張 → 自爆！</p>
+
+          <h3>勝利條件</h3>
+          <p>擊沉對手即獲勝。位置牌標有「隱」表示對手看不到。</p>
+        </div>
+        <div style="margin-top:14px">
+          <button class="btn btn-primary" onclick="closeModal()">知道了</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// ══════════════════════════════════════
+//  Game Start
+// ══════════════════════════════════════
+function startGame() {
+  // Get nickname
+  const input = document.getElementById('nickname-input');
+  const nick = (input.value || '').trim();
+  if (!nick) {
+    input.style.borderColor = '#e74c3c';
+    input.setAttribute('placeholder', '請輸入暱稱才能開始');
+    input.focus();
+    return;
+  }
+
+  currentNickname = nick;
+  localStorage.setItem('silentFleet_nickname', nick);
+
+  closeModal();
+  document.getElementById('start-screen').style.display = 'none';
+  document.getElementById('game-title').style.display = '';
+  document.getElementById('game').style.display = 'flex';
+  document.getElementById('rules-btn').style.display = '';
+  document.getElementById('stats-bar').style.display = '';
+
+  updateStatsBar();
+
+  initGame();
+  addMsg(`🚢 ${currentNickname}，遊戲開始！你是下方的潛艇指揮官`, 'success');
+  addMsg('三張位置牌代表你在空間中的 X、Y、Z 座標', 'info');
+
+  startPlayerTurn();
+}
+
+function backToStart() {
+  closeModal();
+  document.getElementById('start-screen').style.display = '';
+  document.getElementById('game-title').style.display = 'none';
+  document.getElementById('game').style.display = 'none';
+  document.getElementById('rules-btn').style.display = 'none';
+  document.getElementById('stats-bar').style.display = 'none';
+}
+
+// Restore saved nickname
+(function() {
+  const saved = localStorage.getItem('silentFleet_nickname');
+  if (saved) {
+    document.getElementById('nickname-input').value = saved;
+  }
+  initSupabase();
+})();
+
+// Initial render (only if game is active)
+if (G.player) render();
+</script>
+</body>
+</html>
