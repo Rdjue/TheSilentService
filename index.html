@@ -1253,8 +1253,9 @@ function executeAttack() {
   const aiCard_i = G.ai.positions[i];
   const aiCard_j = G.ai.positions[j];
 
-  const hit_i = myCards[0].rank === aiCard_i.rank && myCards[0].suit === aiCard_i.suit;
-  const hit_j = myCards[1].rank === aiCard_j.rank && myCards[1].suit === aiCard_j.suit;
+  // 攻擊命中判定：僅比對數字（規則：數字完全相同即命中，花色不需相同）
+  const hit_i = rankValue(myCards[0].rank) === rankValue(aiCard_i.rank);
+  const hit_j = rankValue(myCards[1].rank) === rankValue(aiCard_j.rank);
 
   // Consume one torpedo
   const usedTorp = G.player.torpedoes.shift();
@@ -1582,7 +1583,8 @@ function aiDoAttack() {
 
     const matchingPairs = [];
     for (let i = 0; i < 3; i++) {
-      if (known[i] && G.ai.positions[i].rank === known[i].rank && G.ai.positions[i].suit === known[i].suit) {
+      // 只比對數字（花色不重要）
+      if (known[i] && rankValue(G.ai.positions[i].rank) === rankValue(known[i].rank)) {
         matchingPairs.push(i);
       }
     }
@@ -1615,8 +1617,9 @@ function aiDoAttack() {
   const plCard_i = G.player.positions[i];
   const plCard_j = G.player.positions[j];
 
-  const hit_i = aiCards[0].rank === plCard_i.rank && aiCards[0].suit === plCard_i.suit;
-  const hit_j = aiCards[1].rank === plCard_j.rank && aiCards[1].suit === plCard_j.suit;
+  // 攻擊命中判定：僅比對數字
+  const hit_i = rankValue(aiCards[0].rank) === rankValue(plCard_i.rank);
+  const hit_j = rankValue(aiCards[1].rank) === rankValue(plCard_j.rank);
 
   // Consume torpedo
   const usedTorp = G.ai.torpedoes.shift();
